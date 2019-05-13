@@ -16,9 +16,9 @@ namespace ntlab
             endDetection();
     }
 
-    std::function<void (size_t, std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, std::string* location)
+    std::function<void (size_t, const std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, const std::string* location)
     {
-        std::cerr << "Detected allocation of " << bytesAllocated << " bytes" << ((location == nullptr) ? "" : *location) << std::endl;
+		printf ("Detected allocation of %u bytes %s\n", static_cast<unsigned long> (bytesAllocated), ((location == nullptr) ? "" : location->c_str()));
     };
 
     std::atomic<int> ScopedAllocationDetector::count = 0;
@@ -39,11 +39,16 @@ namespace ntlab
     {
         if (allocType == _HOOK_ALLOC)
         {
-            std::string location = filename + " line " + std::to_string (lineNumber);
-            onAllocation (size, &location);
+			if (filename != nullptr)
+			{
+				std::string location = "from " + std::string ((const char*)filename) + " line " + std::to_string(lineNumber);
+				onAllocation (size, &location);
+			}
+			else
+				onAllocation (size, nullptr);
         }
 
-        return TRUE;
+        return 1;
     }
 
 #elif defined(__APPLE__) || defined(__MACOSX)
