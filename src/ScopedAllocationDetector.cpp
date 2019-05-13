@@ -43,7 +43,7 @@ namespace ntlab
             onAllocation (size, &location);
         }
 
-        return true;
+        return TRUE;
     }
 
 #elif defined(__APPLE__) || defined(__MACOSX)

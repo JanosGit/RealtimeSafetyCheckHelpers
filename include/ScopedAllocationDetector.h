@@ -13,6 +13,38 @@
 
 namespace ntlab
 {
+    /**
+     * A class to catch any allocation while there is an instance of this class on the stack. Note that allocations on
+     * other threads will be detected too while this is active. Also note that if multiple objects are existing at the
+     * same time, detection will take place as long as the last object has gone out of scope.
+     *
+     * Use it like this
+     *
+     * \code
+       struct SomeObj
+       {
+           int a, b, c;
+       }
+
+       void myFunc()
+       {
+           someUncriticalCalls();
+
+           // the start of the section you want to examine
+           {
+               ntlab::ScopedAllocationDetection allocationDetection;
+
+               // this will trigger the detection
+               std::uniqe_ptr<SomeObj> someObj (new SomeObj);
+
+               // perform some library call to see if it allocates under the hood
+               callToSomeClosedSourceLibAPI();
+           }
+
+           // this won't trigger the detection
+           std::uniqe_ptr<SomeObj> someOtherObj (new SomeObj);
+       }
+     */
     class ScopedAllocationDetector
     {
     public:
@@ -20,7 +52,12 @@ namespace ntlab
 
         ~ScopedAllocationDetector();
 
-        static std::function<void (size_t, std::string*)> onAllocation;
+        /**
+         * A callback invoked if an allocation took place. Per default, this prints an information on the number of
+         * bytes allocated to stderr. On Windows an additional string containing the file and line number of the
+         * function that called malloc is passed to the callback. On non-windows systems this will always be a nullptr.
+         */
+        static std::function<void (size_t numBytesAllocated, std::string* location)> onAllocation;
 
     private:
         static std::atomic<int> count;
