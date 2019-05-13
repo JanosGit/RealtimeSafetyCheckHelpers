@@ -44,7 +44,7 @@ namespace ntlab
         zone->malloc = macSystemMalloc;
     }
 
-    void* ScopedAllocationDetector::detectingMalloc(malloc_zone_t *zone, size_t size)
+    void* ScopedAllocationDetector::detectingMalloc (malloc_zone_t *zone, size_t size)
     {
         onAllocation (size);
         return macSystemMalloc (zone, size);
@@ -52,7 +52,24 @@ namespace ntlab
 
 #else // Linux
 
-    //???
+    ScopedAllocationDetector::LinuxMallocHook ScopedAllocationDetector::linuxSystemMalloc;
+
+    void ScopedAllocationDetector::activateDetection()
+    {
+        linuxSystemMalloc = __malloc_hook;
+        __malloc_hook = detectingMalloc;
+    }
+
+    void ScopedAllocationDetector::endDetection()
+    {
+        __malloc_hook = linuxSystemMalloc;
+    }
+
+    void* ScopedAllocationDetector::detectingMalloc (size_t size)
+    {
+        onAllocation (size);
+        return linuxSystemMalloc (+size);
+    }
 
 #endif
 }
