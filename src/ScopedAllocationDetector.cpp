@@ -16,16 +16,35 @@ namespace ntlab
             endDetection();
     }
 
-    std::function<void (size_t)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated)
+    std::function<void (size_t, std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, std::string* location)
     {
-        std::cerr << "Detected allocation of " << bytesAllocated << " bytes" << std::endl;
+        std::cerr << "Detected allocation of " << bytesAllocated << " bytes" << ((location == nullptr) ? "" : *location) << std::endl;
     };
 
     std::atomic<int> ScopedAllocationDetector::count = 0;
 
-#ifdef _WIN32
+#ifdef WIN32
 
-    //???
+    void ScopedAllocationDetector::activateDetection()
+    {
+        _CrtSetAllocHook (windowsAllocHook);
+    }
+
+    void ScopedAllocationDetector::endDetection()
+    {
+        _CrtSetAllocHook (NULL);
+    }
+
+    int ScopedAllocationDetector::windowsAllocHook (int allocType, void*, size_t size, int, long, const unsigned char* filename, int lineNumber)
+    {
+        if (allocType == _HOOK_ALLOC)
+        {
+            std::string location = filename + " line " + std::to_string (lineNumber);
+            onAllocation (size, &location);
+        }
+
+        return true;
+    }
 
 #elif defined(__APPLE__) || defined(__MACOSX)
 
@@ -46,7 +65,7 @@ namespace ntlab
 
     void* ScopedAllocationDetector::detectingMalloc (malloc_zone_t *zone, size_t size)
     {
-        onAllocation (size);
+        onAllocation (size, nullptr);
         return macSystemMalloc (zone, size);
     }
 
@@ -67,7 +86,7 @@ namespace ntlab
 
     void* ScopedAllocationDetector::detectingMalloc (size_t size)
     {
-        onAllocation (size);
+        onAllocation (size, nullptr);
         return linuxSystemMalloc (+size);
     }
 

@@ -2,7 +2,7 @@
 
 
 #ifdef WIN32
-
+    #include <crtdbg.h>
 #elif defined(__APPLE__) || defined(__MACOSX)
     #include <malloc/malloc.h>
 #else // Linux
@@ -20,14 +20,14 @@ namespace ntlab
 
         ~ScopedAllocationDetector();
 
-        static std::function<void (size_t)> onAllocation;
+        static std::function<void (size_t, std::string*)> onAllocation;
 
     private:
         static std::atomic<int> count;
 
 #ifdef WIN32
 
-        //???
+        static int windowsAllocHook (int allocType, void *userData, size_t size, int blockType, long requestNumber, const unsigned char *filename, int lineNumber);
 
 #elif defined(__APPLE__) || defined(__MACOSX)
 
