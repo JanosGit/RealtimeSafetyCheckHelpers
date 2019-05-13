@@ -10,6 +10,9 @@
 #endif
 
 #include <iostream>
+#include <functional>
+#include <atomic>
+#include <string>
 
 namespace ntlab
 {
@@ -57,7 +60,7 @@ namespace ntlab
          * bytes allocated to stderr. On Windows an additional string containing the file and line number of the
          * function that called malloc is passed to the callback. On non-windows systems this will always be a nullptr.
          */
-        static std::function<void (size_t numBytesAllocated, std::string* location)> onAllocation;
+        static std::function<void (size_t numBytesAllocated, const std::string* location)> onAllocation;
 
     private:
         static std::atomic<int> count;
