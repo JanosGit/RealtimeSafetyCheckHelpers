@@ -74,7 +74,12 @@ namespace ntlab
 
     void* ScopedAllocationDetector::detectingMalloc (malloc_zone_t *zone, size_t size)
     {
+        auto* defaultZone = malloc_default_zone();
+
+        defaultZone->malloc = macSystemMalloc;
         onAllocation (size, nullptr);
+        defaultZone->malloc = detectingMalloc;
+
         return macSystemMalloc (zone, size);
     }
 
