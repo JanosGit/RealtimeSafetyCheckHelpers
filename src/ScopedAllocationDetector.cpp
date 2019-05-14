@@ -21,7 +21,7 @@ namespace ntlab
 		std::cerr << "Detected allocation of " << bytesAllocated << " bytes " << ((location == nullptr) ? "" : *location) << std::endl;
     };
 
-    std::atomic<int> ScopedAllocationDetector::count = 0;
+    std::atomic<int> ScopedAllocationDetector::count (0);
 
 #ifdef WIN32
 
