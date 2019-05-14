@@ -18,7 +18,7 @@ namespace ntlab
 
     std::function<void (size_t, const std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, const std::string* location)
     {
-		printf ("Detected allocation of %lu bytes %s\n", static_cast<unsigned long> (bytesAllocated), ((location == nullptr) ? "" : location->c_str()));
+		std::cerr << "Detected allocation of " << bytesAllocated << " bytes " << ((location == nullptr) ? "" : *location) << std::endl;
     };
 
     std::atomic<int> ScopedAllocationDetector::count = 0;
@@ -39,6 +39,8 @@ namespace ntlab
     {
         if (allocType == _HOOK_ALLOC)
         {
+			_CrtSetAllocHook (NULL);
+			
 			if (filename != nullptr)
 			{
 				std::string location = "from " + std::string ((const char*)filename) + " line " + std::to_string(lineNumber);
@@ -46,6 +48,8 @@ namespace ntlab
 			}
 			else
 				onAllocation (size, nullptr);
+
+			_CrtSetAllocHook (windowsAllocHook);
         }
 
         return 1;
