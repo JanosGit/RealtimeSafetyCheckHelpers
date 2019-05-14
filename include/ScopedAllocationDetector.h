@@ -78,11 +78,11 @@ namespace ntlab
         static void* detectingMalloc (malloc_zone_t *zone, size_t size);
 
 #else // Linux
-        typedef void* (*LinuxMallocHook) (size_t);
+        typedef void* (*LinuxMallocHook) (size_t, const void*);
 
-        static LinuxMallocHook linuxSystemMalloc;
+        static LinuxMallocHook originalMallocHook;
 
-        static void detectingMalloc (size_t size);
+        static void* detectingMalloc (size_t size, const void* caller);
 
 #endif
         static void activateDetection();

@@ -18,7 +18,7 @@ namespace ntlab
 
     std::function<void (size_t, const std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, const std::string* location)
     {
-		printf ("Detected allocation of %u bytes %s\n", static_cast<unsigned long> (bytesAllocated), ((location == nullptr) ? "" : location->c_str()));
+		printf ("Detected allocation of %lu bytes %s\n", static_cast<unsigned long> (bytesAllocated), ((location == nullptr) ? "" : location->c_str()));
     };
 
     std::atomic<int> ScopedAllocationDetector::count = 0;
@@ -76,23 +76,30 @@ namespace ntlab
 
 #else // Linux
 
-    ScopedAllocationDetector::LinuxMallocHook ScopedAllocationDetector::linuxSystemMalloc;
+    ScopedAllocationDetector::LinuxMallocHook ScopedAllocationDetector::originalMallocHook;
 
     void ScopedAllocationDetector::activateDetection()
     {
-        linuxSystemMalloc = __malloc_hook;
+        originalMallocHook = __malloc_hook;
         __malloc_hook = detectingMalloc;
     }
 
     void ScopedAllocationDetector::endDetection()
     {
-        __malloc_hook = linuxSystemMalloc;
+        __malloc_hook = originalMallocHook;
     }
 
-    void* ScopedAllocationDetector::detectingMalloc (size_t size)
+    void* ScopedAllocationDetector::detectingMalloc (size_t size, const void* caller)
     {
+        __malloc_hook = originalMallocHook;
+
         onAllocation (size, nullptr);
-        return linuxSystemMalloc (+size);
+
+        void* ptr = malloc (size);
+
+        __malloc_hook = detectingMalloc;
+
+        return ptr;
     }
 
 #endif
