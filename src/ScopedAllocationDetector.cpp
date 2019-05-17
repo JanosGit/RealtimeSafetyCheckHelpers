@@ -1,12 +1,36 @@
 #include "../include/ScopedAllocationDetector.h"
+#include <cassert>
+
+
 
 namespace ntlab
 {
-    ScopedAllocationDetector::ScopedAllocationDetector()
+    ScopedAllocationDetector::ScopedAllocationDetector (OperationsToCatch operationsToCatch, AllocationCallback allocationCallback, AllocationCallback freeCallback)
     {
         count++;
         if (count == 1)
             activateDetection();
+
+        // Increase the maxNumDetectors value if you really hit this limit
+        assert (count < maxNumDetectors);
+
+        for (auto& d : activeDetectors)
+        {
+            if (d.detector == nullptr)
+            {
+                d.detector = this;
+                d.threadId = getCurrentThreadID();
+                break;
+            }
+        }
+
+        if (allocationCallback)
+            onAllocation = allocationCallback;
+
+        if (freeCallback)
+            onFree = freeCallback;
+
+        this->operationsToCatch = operationsToCatch;
     }
 
     ScopedAllocationDetector::~ScopedAllocationDetector()
@@ -14,14 +38,29 @@ namespace ntlab
         count--;
         if (count == 0)
             endDetection();
+
+        for (auto& d : activeDetectors)
+        {
+            if (d.detector == this)
+            {
+                d.detector = nullptr;
+                break;
+            }
+        }
     }
 
-    std::function<void (size_t, const std::string*)> ScopedAllocationDetector::onAllocation = [] (size_t bytesAllocated, const std::string* location)
+    ScopedAllocationDetector::AllocationCallback ScopedAllocationDetector::defaultAllocationCallback = [] (size_t bytesAllocated, const std::string* optionalFileAndLine)
     {
-		std::cerr << "Detected allocation of " << bytesAllocated << " bytes " << ((location == nullptr) ? "" : *location) << std::endl;
+		std::cerr << "Detected allocation of " << bytesAllocated << " bytes " << ((optionalFileAndLine == nullptr) ? "" : *optionalFileAndLine) << std::endl;
+    };
+
+    ScopedAllocationDetector::AllocationCallback ScopedAllocationDetector::defaultFreeCallback = [] (size_t bytesFreed, const std::string* optionalFileAndLine)
+    {
+        std::cerr << "Detected freeing of " << bytesFreed << " bytes " << ((optionalFileAndLine == nullptr) ? "" : *optionalFileAndLine) << std::endl;
     };
 
     std::atomic<int> ScopedAllocationDetector::count (0);
+    std::array<ScopedAllocationDetector::DetectorProperties, ScopedAllocationDetector::maxNumDetectors> ScopedAllocationDetector::activeDetectors {};
 
 #ifdef WIN32
 
@@ -39,17 +78,25 @@ namespace ntlab
     {
         if (allocType == _HOOK_ALLOC)
         {
-			_CrtSetAllocHook (NULL);
-			
-			if (filename != nullptr)
-			{
-				std::string location = "from " + std::string ((const char*)filename) + " line " + std::to_string(lineNumber);
-				onAllocation (size, &location);
-			}
-			else
-				onAllocation (size, nullptr);
+			auto currentThreadID = getCurrentThreadID();
 
-			_CrtSetAllocHook (windowsAllocHook);
+            for (auto& d : activeDetectors)
+            {
+			     if (d.threadID == currentThreadID)
+			     {
+			         _CrtSetAllocHook (NULL);
+
+			        if (filename != nullptr)
+			        {
+				        std::string location = "from " + std::string ((const char*)filename) + " line " + std::to_string(lineNumber);
+				        d.detector->onAllocation (size, &location);
+			        }
+			        else
+				        d.detector->onAllocation (size, nullptr);
+
+			        _CrtSetAllocHook (windowsAllocHook);
+			     }
+            }
         }
 
         return 1;
@@ -74,11 +121,21 @@ namespace ntlab
 
     void* ScopedAllocationDetector::detectingMalloc (malloc_zone_t *zone, size_t size)
     {
-        auto* defaultZone = malloc_default_zone();
+        auto currentThreadID = getCurrentThreadID();
 
-        defaultZone->malloc = macSystemMalloc;
-        onAllocation (size, nullptr);
-        defaultZone->malloc = detectingMalloc;
+        for (auto& d : activeDetectors)
+        {
+            if (pthread_equal (d.threadId, currentThreadID))
+            {
+                auto* defaultZone = malloc_default_zone();
+
+                defaultZone->malloc = macSystemMalloc;
+                d.detector->onAllocation (size, nullptr);
+                defaultZone->malloc = detectingMalloc;
+
+                break;
+            }
+        }
 
         return macSystemMalloc (zone, size);
     }
@@ -102,7 +159,15 @@ namespace ntlab
     {
         __malloc_hook = originalMallocHook;
 
-        onAllocation (size, nullptr);
+        auto currentThreadID = getCurrentThreadID();
+
+        for (auto& d : activeDetectors)
+        {
+            if (pthread_equal (d.threadId, currentThreadID))
+            {
+                d.detector->onAllocation (size, nullptr);
+            }
+        }
 
         void* ptr = malloc (size);
 
@@ -111,5 +176,11 @@ namespace ntlab
         return ptr;
     }
 
+#endif
+
+#ifdef WIN32
+    ScopedAllocationDetector::ThreadID ScopedAllocationDetector::getCurrentThreadID() { return GetCurrentThreadId(); }
+#else // Posix
+    ScopedAllocationDetector::ThreadID ScopedAllocationDetector::getCurrentThreadID() { return pthread_self(); }
 #endif
 }
