@@ -10,7 +10,7 @@
 #endif
 
 #ifdef WIN32
-    #include <processthreadsapi.h>
+    #include <windows.h>
 #else // Posix
     #include <pthread.h>
 #endif

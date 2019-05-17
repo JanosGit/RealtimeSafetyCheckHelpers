@@ -1,8 +1,6 @@
 #include "../include/ScopedAllocationDetector.h"
 #include <cassert>
 
-
-
 namespace ntlab
 {
     ScopedAllocationDetector::ScopedAllocationDetector (OperationsToCatch operationsToCatch, AllocationCallback allocationCallback, AllocationCallback freeCallback)
@@ -82,7 +80,7 @@ namespace ntlab
 
             for (auto& d : activeDetectors)
             {
-			     if (d.threadID == currentThreadID)
+			     if (d.threadId == currentThreadID)
 			     {
 			         _CrtSetAllocHook (NULL);
 
