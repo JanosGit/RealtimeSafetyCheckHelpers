@@ -9,17 +9,23 @@
     #include <malloc.h>
 #endif
 
+#ifdef WIN32
+    #include <processthreadsapi.h>
+#else // Posix
+    #include <pthread.h>
+#endif
+
 #include <iostream>
 #include <functional>
 #include <atomic>
 #include <string>
+#include <array>
 
 namespace ntlab
 {
     /**
-     * A class to catch any allocation while there is an instance of this class on the stack. Note that allocations on
-     * other threads will be detected too while this is active. Also note that if multiple objects are existing at the
-     * same time, detection will take place as long as the last object has gone out of scope.
+     * A class to catch any allocation going on in the thread that created it while there is an instance of this class
+     * on the stack.
      *
      * Use it like this
      *
@@ -51,19 +57,53 @@ namespace ntlab
     class ScopedAllocationDetector
     {
     public:
-        ScopedAllocationDetector();
+        enum OperationsToCatch
+        {
+            catchMalloc = 1 << 0,
+            catchFree   = 1 << 1
+        };
+
+        using AllocationCallback = std::function<void (size_t numBytesAllocated, const std::string* optionalFileAndLine)>;
+
+        /** Constructor. You can pass a custom callback or just use the default callback that prints to stderr */
+        ScopedAllocationDetector (OperationsToCatch operationsToCatch = catchMalloc, AllocationCallback allocationCallback = nullptr, AllocationCallback freeCallback = nullptr);
 
         ~ScopedAllocationDetector();
 
         /**
-         * A callback invoked if an allocation took place. Per default, this prints an information on the number of
-         * bytes allocated to stderr. On Windows an additional string containing the file and line number of the
-         * function that called malloc is passed to the callback. On non-windows systems this will always be a nullptr.
+         * A callback invoked if an allocation took place. Can be set through the class constructor or reassigned
+         * after construction
          */
-        static std::function<void (size_t numBytesAllocated, const std::string* location)> onAllocation;
+        AllocationCallback onAllocation = defaultAllocationCallback;
+
+        /**
+         * A callback invoked if a call to free took place. Can be set through the class constructor or reassigned
+         * after construction
+         */
+        AllocationCallback onFree = defaultFreeCallback;
 
     private:
+        OperationsToCatch operationsToCatch;
+
+#ifdef WIN32
+        using ThreadID = DWORD;
+#else
+        using ThreadID = pthread_t;
+#endif
+        struct DetectorProperties
+        {
+            ThreadID threadId = ThreadID();
+            ScopedAllocationDetector* detector = nullptr;
+        };
+
+        static const int maxNumDetectors = 16;
         static std::atomic<int> count;
+        static std::array<DetectorProperties, maxNumDetectors> activeDetectors;
+
+        static ThreadID getCurrentThreadID();
+
+        static AllocationCallback defaultAllocationCallback;
+        static AllocationCallback defaultFreeCallback;
 
 #ifdef WIN32
 
